@@ -10,7 +10,6 @@ from geocomp.common import control
 from geocomp import config
 from .rbtree import RBTree
 
-
 # Macros usadas para tipo do evento
 START = 0
 END = 1
@@ -30,6 +29,7 @@ def cmp_e(sweep_line, a, b):
     # São o mesmo segmento
     if a == b: return 0
 
+    # Pontos de interseção com a reta l
     current_x = sweep_line.current_x
     a_y = a.y_intersection(current_x)
     b_y = b.y_intersection(current_x)
@@ -43,7 +43,8 @@ def cmp_e(sweep_line, a, b):
         else: return 1
 
     # Caso os coeficientes de inclinação sejam diferentes, desempatamos 
-    # com eles
+    # com eles, levando em considerção se ja processamos ou não a 
+    # interseção entre essas retas
     a_slope = a.a_cof
     b_slope = b.a_cof
     if a_slope != b_slope:
@@ -55,10 +56,10 @@ def cmp_e(sweep_line, a, b):
             else:                 return 1
 
     # Ultimo desempate se da com a reta que começa ou termina antes
-    if a.segment[0][0] < b.segment[0][0]: return -1
-    if a.segment[0][0] > b.segment[0][0]: return 1
-    if a.segment[1][0] < b.segment[1][0]: return -1
-    if a.segment[1][0] > b.segment[1][0]: return 1
+    if (a.segment[0][0], a.segment[1][0]) < (b.segment[0][0], b.segment[1][0]): 
+        return -1
+    elif (a.segment[0][0], a.segment[1][0]) > (b.segment[0][0], b.segment[1][0]):
+        return 1
     return 0
     
 def segment_intersection(s, t):
@@ -124,7 +125,6 @@ class Event:
         self.type = t
         self.point = p
         self.segment = s
-        self.id = None
 
         if s != None:
             x1, y1 = s[0][0], s[0][1]
@@ -144,7 +144,7 @@ class Event:
         '''
         return hash(self.point)
 
-    def y_intersection(self, x: float):
+    def y_intersection(self, x):
         '''
         Dado um ponto x, retorna a y-coordenada do ponto (x, y), tal que 
         o mesmo pertence ao segmento. Se x esta fora dos limites do segmento,
@@ -183,9 +183,9 @@ class SweepLine:
         self.before_flag = True 
 
     def get_intersections(self):
-        """
+        '''
         Retorna lista com pontos de interseção, nossa resposta.
-        """
+        '''
         inter_points = []
         for i in self.intersections: inter_points.append(i)
         return inter_points
