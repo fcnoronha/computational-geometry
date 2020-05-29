@@ -9,10 +9,12 @@ Algoritmos disponveis:
 """
 from . import brute
 from . import divide_conquer
+from . import aleatorio
 
 children = [
 	[ 'brute', 'Brute', 'Forca Bruta' ],
-	[ 'divide_conquer', 'Divide_conquer', 'Divisao e conquista' ]
+	[ 'divide_conquer', 'Divide_conquer', 'Divisao e conquista' ],
+	[ 'aleatorio', 'Aleatorio', 'Aleatorizado' ]
 ]
 
 __all__ = [a[0] for a in children]
