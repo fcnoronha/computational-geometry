@@ -5,9 +5,9 @@ DEBUG = True
 
 # tamanho da area de desenho
 # WIDTH = 500
-WIDTH = 600
+WIDTH = 800
 # HEIGHT = 500
-HEIGHT = 400
+HEIGHT = 500
 
 # delay entre um passo e outro (em milissegundos)
 DELAY = 50

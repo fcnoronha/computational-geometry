@@ -5,6 +5,8 @@
 
 from geocomp.common import prim
 from geocomp.common import segment
+from geocomp.common import polygon
+from geocomp.common import point
 from geocomp.common import control
 from geocomp import config
 from random import shuffle
@@ -14,126 +16,199 @@ import math
 INF = float('inf')
 EPS = 0.0000000001
 
-# função auxiliar que recebe 2 pontos e atualiza o melhor caso necessario
-def update(a, b, best):
+class Closest:  
     '''
-    a, b: pontos candidatos
-    best: melhores pontos encontrados
+    classe que implementa as funcoes necessarias para se encotrar o par de
+    pontos mais proximos de maneira aleatorizada.
     '''
+    def __init__(self, pts):
+        '''
+        metodo construtor
+        '''
+        # melhor par encontrado ate agora, distancia entre eles e
+        # id's da parte grafica
+        self.best = [[None, None, INF], [None, None, None]]
+        self.pts = pts
+        self.delta = INF
+        self.h = {} # dicionario/hashtable
+        self.id_lines = [] # lista de ids usados na animacao
 
-    a_id = a.hilight(color='blue')
-    b_id = b.hilight(color='blue')
-    l_id = a.lineto(b, color='blue')
-    control.sleep()
+    def update(self, a, b):
+        '''
+        função auxiliar que recebe 2 pontos e atualiza o melhor caso necessario
+        a, b: pontos candidatos
+        '''
 
-    d = a.distance_to(b)
-    if d < EPS: d = 0
-    if d < best[0][2]:
-
-        # atualizando visualização
+        a_id = a.hilight(color='cyan')
+        b_id = b.hilight(color='cyan')
+        l_id = a.lineto(b, color='cyan')
         control.sleep()
-        if best[1][0] != None:
-            best[0][0].unhilight(best[1][0])
-        if best[1][1] != None:
-            best[0][1].unhilight(best[1][1])
-        if best[1][2] != None:
-            best[0][0].remove_lineto(best[0][1], best[1][2])
+        d = a.distance_to(b)
+        if d < EPS: d = 0
+        if d < self.best[0][2]:
 
-        best[0][0] = a
-        best[0][1] = b
-        best[0][2] = d
-        best[1][0] = a.hilight(color='green')
-        best[1][1] = b.hilight(color='green')
-        best[1][2] = a.lineto(b, color='green')
-    
-    a.unhilight(a_id)
-    b.unhilight(b_id)
-    a.remove_lineto(b, l_id)
-    return d
+            # atualizando visualização
+            control.sleep()
+            if self.best[1][0] != None:
+                self.best[0][0].unhilight(self.best[1][0])
+            if self.best[1][1] != None:
+                self.best[0][1].unhilight(self.best[1][1])
+            if self.best[1][2] != None:
+                self.best[0][0].remove_lineto(self.best[0][1], self.best[1][2])
 
-# encontra as dimensoes (largura, altura) do retangulo que contem todos
-# os pontos da coleção
-def find_limits(pts):
-    '''
-    p: coleção de pontos
-    '''
-    
-    min_x = max_x = pts[0].x
-    min_y = max_y = pts[0].y
-    for p in pts:
-        x, y = p.x, p.y
-        if x < min_x: min_x = x
-        if x > max_x: max_x = x
-        if y < min_y: min_y = y
-        if y > max_y: max_y = y
+            self.best[0][0] = a
+            self.best[0][1] = b
+            self.best[0][2] = d
+            self.best[1][0] = a.hilight(color='green')
+            self.best[1][1] = b.hilight(color='green')
+            self.best[1][2] = a.lineto(b, color='green')
+        
+        a.unhilight(a_id)
+        b.unhilight(b_id)
+        a.remove_lineto(b, l_id)
+        return d
 
-    return (max_x - min_x + EPS), (max_y - min_y + EPS)
+    def find_limits(self):
+        '''
+        encontra o ponto superior direito e o inferior esquerdo do retangulo
+        que contem todos os pontos da coleção, com um aumento de 20% no
+        comprimento e largura
+        p: coleção de pontos
+        '''
+        
+        self.ur = [self.pts[0].x, self.pts[0].x]
+        self.bl = [self.pts[0].x, self.pts[0].y]
+        for p in self.pts:
+            x, y = p.x, p.y
+            if x < self.bl[0]: self.bl[0] = x
+            if x > self.ur[0]: self.ur[0] = x
+            if y < self.bl[1]: self.bl[1] = y
+            if y > self.ur[1]: self.ur[1] = y
 
-# encontra o indice do quadrado em que o ponto se encontra
-def index_square(p, delta):
-    '''
-    p: ponto
-    delta: largura do quadrado
-    '''
-    r = math.ceil( p.x / (delta/2) )
-    s = math.ceil( p.y / (delta/2) )
-    return r, s
+        # 10 porcento a mais em cada dimensao
+        delta_x = (self.ur[0] - self.bl[0])/10.0
+        delta_y = (self.ur[1] - self.bl[1])/10.0
+        self.ur[0] += delta_x
+        self.ur[1] += delta_y
+        self.bl[0] -= delta_x
+        self.bl[1] -= delta_y
 
-def Aleatorio(pts):
+    def index_square(self, p):
+        '''
+        encotra os indices do quadrado em que o ponto se encontra, 
+        coluna e linha. 
+        p: ponto
+        '''
+        r = math.floor( (p.x - self.bl[0]) / (self.delta/2.0) )
+        s = math.floor( (p.y - self.bl[1]) / (self.delta/2.0) )
+        return r, s
 
-    # embaralhando os pontos
-    shuffle(pts)
-
-    if len(pts) < 2:
-        return
-
-    # melhor par encontrado ate agora, distancia entre eles e
-    # id's da parte grafica
-    best = [[None, None, float('inf')], [None, None, None]]
-
-    # inicializando com dois primeiros pontos
-    min_dist = update(pts[0], pts[1], best)
-    delta_x, delta_y = find_limits(pts)
-    # dicionario/hashtable
-    h = {}
-
-    # mais de um ponto na mesma posição
-    if min_dist < EPS:
-        closest = segment.Segment(best[0][0], best[0][1])
-        closest.extra_info = 'Menor distancia: %.4f' %best[0][2]
+    def build_ans(self):
+        '''
+        constroi o segmento de resposta
+        '''
+        closest = segment.Segment(self.best[0][0], self.best[0][1])
+        closest.extra_info = 'Menor distancia: %.4f' %self.best[0][2]
         return closest
 
-    # insere o ponto h na hashtable
-    def update_hashtable(delta, p):
-        r, s = index_square(p, delta)
-        h[(r,s)] = p
+    def build_animation_lines(self):
+        '''
+        controi as linhas imaginarias que dividem o plano em quadrados
+        '''
+        delta = self.delta/2.0
+        for il in self.id_lines:
+            control.plot_delete(il)
+        self.id_lines.clear()
+        r = self.bl[1]
+        c = self.bl[0]
+        while r < self.ur[1]:
+            self.id_lines.append( control.plot_horiz_line(r, color='blue') )
+            r += delta
+        while c < self.ur[0]:
+            self.id_lines.append( control.plot_vert_line(c, color='blue') )
+            c += delta
+        control.sleep()
 
-    # constroi a hashtable de acorod com um delta e um indice
-    # limite na lista de pontos, 
-    def build_hashtable(delta, idx):
-        h.clear()
+    def build_square(self, c, r):
+        '''
+        constroi um quadrado usado para marcar qual ponto do plano estamos 
+        usando para comparar com um ponto atual
+        c: indice da coluna
+        r: indice da linha
+        '''
+        sbl = [(c)*(self.delta/2.0) + self.bl[0], (r)*(self.delta/2.0) + self.bl[1]]
+        sur = [sbl[0] + (self.delta/2.0), sbl[1] + (self.delta/2.0)]
+        
+        tl = point.Point(sbl[0], sur[1])
+        tr = point.Point(sur[0], sur[1])
+        dr = point.Point(sur[0], sbl[1])
+        dl = point.Point(sbl[0], sbl[1])
+        sqr = polygon.Polygon([tl, tr, dr, dl])
+        sqr.plot(color='yellow')
+        control.sleep()
+        return sqr
+
+    def update_hashtable(self, p):
+        '''
+        insere o ponto p na hashtable
+        '''
+        r, s = self.index_square(p)
+        self.h[(r,s)] = p
+
+    def build_hashtable(self, idx):
+        '''
+        constroi a hashtable
+        idx: index maximo, inclusivo, dos pontos que devem ser considerados
+        '''
+        self.build_animation_lines()
+        self.h.clear()
         for i in range(idx+1):
-            update_hashtable(delta, pts[i])
-        return h
+            self.update_hashtable(self.pts[i])
 
-    build_hashtable(min_dist, 1)
-    for i in range(2, len(pts)):
-        pj = pts[i]
-        r, s = index_square(pj, min_dist)
-        new_dist = INF
-        for t in range(-1, 2):
-            for u in range(-1, 2):
-                if (r+t, s+u) in h:
-                    new_dist = update(pj, h[(r+t, s+u)], best)
+    def find_closest(self):
         
-        if new_dist + EPS < min_dist:
-            min_dist = new_dist
-            if min_dist < EPS: break
-            build_hashtable(min_dist, i)
-        else:
-            update_hashtable(min_dist, pj)
+        # embaralhando os pontos
+        shuffle(self.pts)
+
+        if len(self.pts) < 2: return self.build_ans()
+        self.find_limits()
+
+        # inicializando com dois primeiros pontos
+        self.delta = self.update(self.pts[0], self.pts[1])
+
+        # mais de um ponto na mesma posição
+        if self.delta < EPS: return self.build_ans()
+
+        self.build_hashtable(1)
+        for i in range(2, len(self.pts)):
+            pj = self.pts[i]
+            r, s = self.index_square(pj)
+            new_dist = INF
+            for t in range(-2, 3):
+                for u in range(-2, 3):
+                    id_pt = pj.hilight(color='yellow')
+                    sqr = self.build_square(r+t, s+u)
+                    if (r+t, s+u) in self.h:
+                        new_dist = self.update(pj, self.h[(r+t, s+u)])
+                    sqr.hide()
+                    control.plot_delete(id_pt)
+                    
+            if new_dist + EPS < self.delta:
+                self.delta = new_dist
+                if self.delta < EPS: break
+                self.build_hashtable(i)
+            else:
+                self.update_hashtable(pj)
         
-    closest = segment.Segment(best[0][0], best[0][1])
-    closest.extra_info = 'Menor distancia: %.4f' %best[0][2]
-    return closest
+        return self.build_ans()
+
+def Aleatorio(pts):
+    '''
+    função principal que calcula o par de pontos mais proximos usando um
+    algoritmo aleatorizado, obtendo tempo esperado linear.
+    pts: conjunto de pontos da colecao
+    '''
+
+    c = Closest(pts)
+    return c.find_closest()
 
